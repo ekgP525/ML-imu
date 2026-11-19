@@ -1,1 +1,1 @@
-model,fold,macro_f1,accuracy,mode_macro_f1
+date,owner,model,setting,fold,macro_f1,accuracy,mode_macro_f1,auroc,fpr95,note
