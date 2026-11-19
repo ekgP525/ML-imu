@@ -3,7 +3,7 @@ from pathlib import Path
 
 import requests
 
-ZENODO_RECORD_ID = ""  # TODO: Zenodo 레코드 ID
+ZENODO_RECORD_ID = "2653918"  # Lomio et al., 2019
 DATA_DIR = Path(__file__).resolve().parent
 
 

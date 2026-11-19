@@ -40,15 +40,22 @@ IMU 진동 신호만으로 바닥 재질을 인식하고, 학습에 없던 바�
 ## 시작하기 (Colab)
 
 ```python
-!git clone https://github.com/<팀계정>/imu-floor.git
-%cd imu-floor
+!git clone https://github.com/ekgP525/ML-imu.git
+%cd ML-imu
 !pip install -q -r requirements.txt
 !python data/download.py          # Zenodo에서 data/ 로 다운로드
 
 import sys; sys.path.append("src")
 from recordings import load_dataset      # X(6채널), y(8종), recording(0~20)
-from splits import load_folds            # splits/folds.json
-from evaluate import evaluate
+from splits import load_folds, fold_indices   # splits/folds.json
+from evaluate import evaluate, log_result
+
+X, y, rec = load_dataset("data")
+for fold in load_folds():
+    tr, te = fold_indices(fold, rec)
+    ...  # 학습·예측 후 예측을 모아서
+# 21개 fold 예측을 모두 모은 뒤 한 번에 평가 (fold별 macro-F1은 test 재질이 1종이라 의미 없음)
+# log_result("B", "rf", evaluate(y_true_all, y_pred_all))
 ```
 
 ## 폴더 구조
