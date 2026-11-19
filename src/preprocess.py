@@ -46,8 +46,10 @@ def augment(x, y, noise_sd=0.01, scale=0.10, max_shift=8, n_copies=1, seed=SEED)
 
 
 def overlap_windows(x, y, recording, win=128, stride=64):
-    """64스텝 겹침 분할: 같은 녹화의 구간을 원래 순서(인덱스 순)대로 이어 붙인 뒤 다시 자른다.
-    학습 세트만 넣는다. x, y, recording은 같은 순서."""
+    """64스텝 겹침 분할: 같은 묶음의 구간을 원래 순서(인덱스 순)대로 이어 붙인 뒤 다시 자른다.
+    학습 세트만 넣는다. x, y, recording은 같은 순서.
+    주의: recording 자리에 recordings.load_chunks()의 묶음 번호를 넣어야
+          그룹 안 끊김(그룹 62)을 이어 붙이지 않는다."""
     xs, ys, rs = [], [], []
     recording = np.asarray(recording)
     for r in np.unique(recording):

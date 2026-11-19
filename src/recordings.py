@@ -31,9 +31,27 @@ def load_raw(data_dir="data"):
     """원본 10채널 데이터, 9종 라벨, 80그룹 번호를 그대로 불러온다."""
     d = Path(data_dir)
     X = np.load(d / "X_data.npy").astype(np.float32)
-    labels = np.load(d / "label.npy", allow_pickle=True).astype(str)
+    labels = np.load(d / "label.npy", allow_pickle=True)
     groups = np.load(d / "groups.npy", allow_pickle=True).astype(int)
-    return X, labels, groups
+    if np.issubdtype(labels.dtype, np.number):
+        labels = _names_from_details(d / "details.csv", labels)
+    return X, labels.astype(str), groups
+
+
+SURFACES9 = CLASSES + ["hard_tiles_large_space"]
+
+
+def _names_from_details(path, num_labels):
+    """label.npy가 숫자(0~8)면 details.csv의 재질 이름 열로 바꾼다."""
+    det = pd.read_csv(path)
+    cols = [c for c in det.columns if det[c].astype(str).isin(SURFACES9).all()]
+    if not cols:
+        raise ValueError(f"details.csv에서 재질 이름 열을 못 찾음: {list(det.columns)}")
+    names = det[cols[0]].astype(str).values
+    assert len(names) == len(num_labels), "details.csv 행 수가 label.npy와 다름"
+    mapping = pd.crosstab(num_labels.astype(int), names)
+    assert ((mapping > 0).sum(axis=1) == 1).all(), "숫자 라벨 하나에 재질 이름이 여러 개 대응됨"
+    return names
 
 
 def _qdist(a, b):
@@ -102,3 +120,26 @@ def summary(y, recording):
                                     recordings=("recording", "nunique"))
     out["mode"] = out.index.map(MODE)
     return out
+
+
+def continuous_chunks(X, labels, groups, thr=JOIN_THR):
+    """시간적으로 끊김 없이 이어지는 구간 묶음 번호.
+    녹화 경계뿐 아니라 그룹 안에서 쿼터니언이 튀는 곳(예: 그룹 62)에서도 새 묶음을 시작한다.
+    64스텝 겹침 분할처럼 구간을 이어 붙이는 작업에는 recording 대신 이 번호를 쓴다."""
+    chunk = np.empty(len(X), dtype=int)
+    cur, prev_i, prev_lab = 0, None, None
+    for g in sorted(np.unique(groups)):
+        for i in np.where(groups == g)[0]:
+            if prev_i is not None:
+                d = _qdist(X[prev_i, -1, QUAT], X[i, 0, QUAT])
+                if labels[i] != prev_lab or d >= thr:
+                    cur += 1
+            chunk[i] = cur
+            prev_i, prev_lab = i, labels[i]
+    return chunk
+
+
+def load_chunks(data_dir="data"):
+    """continuous_chunks를 원본 데이터에서 바로 계산한다 (load_dataset과 같은 순서)."""
+    X, labels, groups = load_raw(data_dir)
+    return continuous_chunks(X, labels, groups)
