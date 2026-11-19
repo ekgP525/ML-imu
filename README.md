@@ -10,14 +10,16 @@ IMU 진동 신호만으로 바닥 재질을 인식하고, 학습에 없던 바�
 | 파일 | 형태 | 내용 |
 |---|---|---|
 | `X_data.npy` | (7626, 128, 10) | 구간 × 시간 스텝 × 채널 |
-| `label.npy` | (7626,) | 재질 라벨 9종 |
+| `label.npy` | (7626,) | 재질 라벨 9종재질 라벨 9종 (숫자 0~8, 이름은 `details.csv`에서 가져옴) |
 | `groups.npy` | (7626,) | 그룹 번호 0~79 |
 | `details.csv` | 7626행 | id, 그룹, 재질 |
 
 - **채널**: 0~3 방향(쿼터니언), 4~6 각속도, 7~9 선가속도. 모델 입력은 방향을 뺀 6채널(4~9)
 - **녹화 복원**: 80개 그룹은 연속 녹화 21개를 최대 128구간씩 자른 것
   - 같은 재질로 이어지는 그룹 경계 59곳: 쿼터니언 차이 0.0014 이하 (구간 안 한 스텝 변화 중앙값 0.0002)
-  - 재질이 바뀌는 경계 20곳: 0.10~2.00
+  - 재질이 바뀌는 경계 20곳: 0.066~1.41
+  - 기준값 0.01로 두 경우를 나눔 (`recordings.JOIN_THR`)
+  - 그룹 62(tiled) 안에 방향이 크게 바뀌는 지점 1곳(구간 5805→5806, 차이 1.16). 앞뒤 그룹 경계는 모두 이어져서 같은 녹화로 둠. 64스텝 겹침 분할에는 `load_chunks()`로 이 지점을 끊어서 사용
 - **8종 통합**: `hard_tiles`와 `hard_tiles_large_space`는 녹화가 각 1개뿐이라 `hard_tiles`로 합침
 
 | 재질(8종) | 구간 수 | 녹화 수 | 청소 모드 |
@@ -57,6 +59,15 @@ for fold in load_folds():
 # 21개 fold 예측을 모두 모은 뒤 한 번에 평가 (fold별 macro-F1은 test 재질이 1종이라 의미 없음)
 # log_result("B", "rf", evaluate(y_true_all, y_pred_all))
 ```
+
+**64스텝 겹침 분할(증강)을 쓸 때**: 녹화 번호 대신 `load_chunks()`의 묶음 번호를 넣는다.
+
+​```python
+from recordings import load_chunks
+from preprocess import overlap_windows
+chunk = load_chunks("data")
+xo, yo, co = overlap_windows(X[tr], y[tr], chunk[tr])   # 학습 세트에만 적용
+​```
 
 ## 폴더 구조
 
