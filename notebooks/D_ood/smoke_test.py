@@ -5,6 +5,7 @@
 import numpy as np
 
 from ood import Prototype, confident_mistakes, run_heldout, summarize, to_results_rows
+from splits import make_material_out_folds
 
 rng = np.random.default_rng(42)
 MATERIALS = ["carpet", "concrete", "fine_concrete", "hard_tiles",
@@ -30,7 +31,7 @@ def load(heldout, fold):
     return z, z @ W
 
 
-df = run_heldout(load, y, rec, model="fake")
+df = run_heldout(load, y, rec, model="fake", folds=make_material_out_folds(y, rec))
 by_material, by_difficulty = summarize(df)
 print(by_difficulty.round(3))
 print(df[df.method == "proto"][["known_pass", "unknown_reject"]].mean().round(3))

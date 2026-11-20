@@ -11,8 +11,9 @@ import numpy as np
 import pandas as pd
 from scipy.special import logsumexp, softmax
 
-sys.path.append(str(Path(__file__).resolve().parents[2]))
-from src.evaluate import auroc, fpr_at_95_tpr  # noqa: E402
+sys.path.append(str(Path(__file__).resolve().parents[2] / "src"))
+from evaluate import RESULT_COLUMNS, auroc, fpr_at_95_tpr  # noqa: E402
+from splits import inner_val_recordings, load_material_folds  # noqa: E402
 
 SEED = 42
 TPR = 0.95
@@ -24,11 +25,6 @@ DIFFICULTY = {
     "tiled": "near",
     "hard_tiles": "near",
 }
-
-RESULT_COLUMNS = [
-    "date", "owner", "model", "setting", "fold", "macro_f1", "accuracy",
-    "mode_macro_f1", "auroc", "fpr95", "note",
-]
 
 
 # ---------------------------------------------------------------- 점수 함수
@@ -116,19 +112,12 @@ def fit_tau(known_scores, tpr=TPR):
     return float(np.quantile(known_scores, tpr))
 
 
-def cross_fit_scores(make_scorer, z, y, rec):
-    """학습 녹화를 하나씩 검증 녹화로 떼어 그 녹화 구간의 점수를 모은다.
-
-    떼어내면 재질이 학습에서 사라지는 녹화(재질의 마지막 학습 녹화)는 건너뛴다.
-    """
-    scores = []
-    for r in np.unique(rec):
-        val = rec == r
-        if not np.any(y[~val] == y[val][0]):
-            continue
-        scorer = make_scorer().fit(z[~val], y[~val])
-        scores.append(scorer.score(z[val]))
-    return np.concatenate(scores)
+def val_scores(make_scorer, z, y, rec, train_recs):
+    """학습 녹화 중 검증 녹화(splits.inner_val_recordings)를 떼고 맞춘 뒤 검증 구간 점수를 낸다."""
+    val_recs = inner_val_recordings(train_recs, y, rec)
+    fit = np.isin(rec, train_recs) & ~np.isin(rec, val_recs)
+    val = np.isin(rec, val_recs)
+    return make_scorer().fit(z[fit], y[fit]).score(z[val])
 
 
 def open_set_predict(proto, z, tau, unknown=-1):
@@ -139,28 +128,11 @@ def open_set_predict(proto, z, tau, unknown=-1):
 
 
 # ---------------------------------------------------------------- 실험 루프
-def heldout_folds(y, rec):
-    """재질 하나 빼기 × 남은 녹화 하나 빼기.
-
-    fold 번호는 테스트 녹화 번호(splits/folds.json과 같은 번호)를 그대로 쓴다.
-    """
-    rec_material = {r: y[rec == r][0] for r in np.unique(rec)}
-    for m in np.unique(y):
-        remaining = [r for r, c in rec_material.items() if c != m]
-        for r in remaining:
-            yield {
-                "heldout": m,
-                "fold": int(r),
-                "test_rec": r,
-                "train_recs": [t for t in remaining if t != r],
-            }
-
-
 def run_fold(z, y, rec, split, logits=None, knn_k=10):
     """한 fold에서 모든 방법의 AUROC·FPR@95와 제안 방법의 τ 판정 결과를 계산한다."""
-    train = np.isin(rec, split["train_recs"])
-    known = rec == split["test_rec"]
-    unknown = y == split["heldout"]
+    train = np.isin(rec, split["train"])
+    known = np.isin(rec, split["test_known"])
+    unknown = np.isin(rec, split["unknown"])
     test = known | unknown
     y_ood = unknown[test].astype(int)
 
@@ -178,7 +150,7 @@ def run_fold(z, y, rec, split, logits=None, knn_k=10):
     ]
 
     # 제안 방법: τ는 학습 녹화 안의 검증 녹화로만 정한다
-    tau = fit_tau(cross_fit_scores(Prototype, z[train], y[train], rec[train]))
+    tau = fit_tau(val_scores(Prototype, z, y, rec, split["train"]))
     s = scores["proto"]
     next(r for r in rows if r["method"] == "proto").update({
         "tau": tau,
@@ -188,16 +160,20 @@ def run_fold(z, y, rec, split, logits=None, knn_k=10):
     return rows
 
 
-def run_heldout(load, y, rec, model, knn_k=10):
-    """load(heldout, fold) -> (z, logits 또는 None). fold별 결과 표를 반환한다."""
+def run_heldout(load, y, rec, model, folds=None, knn_k=10):
+    """load(held_out, fold) -> (z, logits 또는 None). fold별 결과 표를 반환한다.
+
+    folds를 주지 않으면 splits/folds.json의 material_out(147개)을 쓴다.
+    """
+    folds = load_material_folds() if folds is None else folds
     rows = []
-    for split in heldout_folds(y, rec):
-        z, logits = load(split["heldout"], split["fold"])
+    for split in folds:
+        z, logits = load(split["held_out"], split["fold"])
         for row in run_fold(z, y, rec, split, logits, knn_k):
             rows.append({
                 "model": model,
-                "heldout": split["heldout"],
-                "difficulty": DIFFICULTY.get(split["heldout"], "mid"),
+                "heldout": split["held_out"],
+                "difficulty": DIFFICULTY.get(split["held_out"], "mid"),
                 "fold": split["fold"],
                 **row,
             })
