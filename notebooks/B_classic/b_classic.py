@@ -109,6 +109,43 @@ class FeatureMLP:
         return self.classes_[self.logits(F).argmax(axis=1)]
 
 
+def select_features(F_all, spec):
+    """특성 조합 선택. spec 예: "A", "AB", "ABC", "AC", "ABC-mean"(B의 채널 평균 6개 제외)."""
+    groups, _, drop = spec.partition("-")
+    cols = [c for c in F_all.columns if c[0] in groups]
+    if drop:
+        cols = [c for c in cols if not c.startswith(f"B_{drop}_")]
+    return F_all[cols]
+
+
+def make_classic(name, seed=SEED):
+    """수업에서 다룬 고전 모델. 표준화는 파이프라인 안에서 학습 fold로만 맞춘다."""
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.neighbors import KNeighborsClassifier
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
+    if name == "rule":
+        return RuleBaseline()
+    if name == "logreg_l2":
+        clf = LogisticRegression(C=1.0, class_weight="balanced", max_iter=3000)
+    elif name == "logreg_l1":
+        # saga는 이 데이터에서 너무 느려(조합당 5분+) liblinear 일대다(one-vs-rest)로 학습한다.
+        from sklearn.multiclass import OneVsRestClassifier
+        clf = OneVsRestClassifier(LogisticRegression(penalty="l1", C=0.5, solver="liblinear",
+                                                     class_weight="balanced", max_iter=3000))
+    elif name == "knn":
+        clf = KNeighborsClassifier(n_neighbors=15)
+    elif name == "rf":
+        clf = RandomForestClassifier(n_estimators=150, min_samples_leaf=5, class_weight="balanced",
+                                     n_jobs=-1, random_state=seed)
+    elif name == "mlp":
+        return FeatureMLP(seed=seed)
+    else:
+        raise ValueError(name)
+    return make_pipeline(StandardScaler(), clf)
+
+
 def export_embeddings(F, y, rec, folds, out_dir, held_key="held_out", make_model=FeatureMLP,
                       name="mlp", skip_existing=True):
     """split마다 학습 녹화로 모델을 맞추고, 전체 7626구간의 임베딩·logits를 데이터셋 순서로 저장한다.
