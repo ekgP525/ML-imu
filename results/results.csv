@@ -1,1 +1,2 @@
 date,owner,model,setting,fold,macro_f1,accuracy,mode_macro_f1,auroc,fpr95,note
+2026-11-23,B,rule_baseline,8class,all,0.351,0.3732,0.6663,,,log(acc_z std) 재질별 중앙값 최근접
