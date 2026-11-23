@@ -85,8 +85,10 @@ class FeatureMLP:
                                   alpha=self.alpha, max_iter=self.max_iter,
                                   early_stopping=True, validation_fraction=0.1,
                                   n_iter_no_change=15, random_state=self.seed)
-        self.mlp_.fit(self.scaler_.transform(np.asarray(F, dtype=float)), np.asarray(y))
-        self.classes_ = self.mlp_.classes_
+        # 라벨을 숫자(0..K-1)로 바꿔 학습한다. sklearn 일부 버전은 early_stopping 검증 점수 계산에서
+        # 문자열 라벨이면 TypeError(isnan)가 난다. 숫자 i = self.classes_[i] (알파벳 순).
+        self.classes_, y_idx = np.unique(np.asarray(y).astype(str), return_inverse=True)
+        self.mlp_.fit(self.scaler_.transform(np.asarray(F, dtype=float)), y_idx)
         return self
 
     def embed(self, F):
