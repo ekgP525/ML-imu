@@ -68,6 +68,72 @@ def run_loro(make_model, F, y, rec, folds=None):
     return pred.astype(str)
 
 
+class FeatureMLP:
+    """특성(A~C) → 표준화 → MLP. 마지막 은닉층 출력을 임베딩으로, 출력층 직전 값을 logits로 내보낸다.
+
+    표준화는 fit에 들어온 학습 구간으로만 맞춘다 (test 누수 없음).
+    """
+
+    def __init__(self, hidden=(64, 32), alpha=1e-3, max_iter=300, seed=SEED):
+        self.hidden, self.alpha, self.max_iter, self.seed = hidden, alpha, max_iter, seed
+
+    def fit(self, F, y):
+        from sklearn.neural_network import MLPClassifier
+        from sklearn.preprocessing import StandardScaler
+        self.scaler_ = StandardScaler().fit(np.asarray(F, dtype=float))
+        self.mlp_ = MLPClassifier(hidden_layer_sizes=self.hidden, activation="relu",
+                                  alpha=self.alpha, max_iter=self.max_iter,
+                                  early_stopping=True, validation_fraction=0.1,
+                                  n_iter_no_change=15, random_state=self.seed)
+        self.mlp_.fit(self.scaler_.transform(np.asarray(F, dtype=float)), np.asarray(y))
+        self.classes_ = self.mlp_.classes_
+        return self
+
+    def embed(self, F):
+        """마지막 은닉층(ReLU 후) 출력. 크기: (N, hidden[-1])."""
+        h = self.scaler_.transform(np.asarray(F, dtype=float))
+        for W, b in zip(self.mlp_.coefs_[:-1], self.mlp_.intercepts_[:-1]):
+            h = np.maximum(h @ W + b, 0)
+        return h.astype(np.float32)
+
+    def logits(self, F):
+        """softmax 전 출력. 열 순서는 self.classes_ (알파벳 순)."""
+        z = self.embed(F) @ self.mlp_.coefs_[-1] + self.mlp_.intercepts_[-1]
+        if z.shape[1] == 1:   # 2종일 때 sklearn은 출력 1개 → 2열로 맞춤
+            z = np.hstack([np.zeros_like(z), z])
+        return z.astype(np.float32)
+
+    def predict(self, F):
+        return self.classes_[self.logits(F).argmax(axis=1)]
+
+
+def export_embeddings(F, y, rec, folds, out_dir, held_key="held_out", make_model=FeatureMLP,
+                      name="mlp", skip_existing=True):
+    """split마다 학습 녹화로 모델을 맞추고, 전체 7626구간의 임베딩·logits를 데이터셋 순서로 저장한다.
+
+    파일: emb_{name}_{빠진재질}_{fold}.npy, logits_{name}_{빠진재질}_{fold}.npy
+          (빠진 재질이 없는 21-fold는 'none'), classes_{name}_{빠진재질}_{fold}.json (logits 열 순서)
+    """
+    import json
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    y, rec = np.asarray(y), np.asarray(rec)
+    Fa = np.asarray(F, dtype=float)
+    for i, split in enumerate(folds):
+        held = split.get(held_key, "none")
+        tag = f"{name}_{held}_{split['fold']}"
+        if skip_existing and (out_dir / f"emb_{tag}.npy").exists():
+            continue
+        tr = np.isin(rec, split["train"])
+        model = make_model().fit(Fa[tr], y[tr])
+        np.save(out_dir / f"emb_{tag}.npy", model.embed(Fa))
+        np.save(out_dir / f"logits_{tag}.npy", model.logits(Fa))
+        with open(out_dir / f"classes_{tag}.json", "w") as f:
+            json.dump([str(c) for c in model.classes_], f)
+        if (i + 1) % 10 == 0 or i + 1 == len(folds):
+            print(f"{i + 1}/{len(folds)} 저장: {tag}")
+
+
 def per_recording_accuracy(y, pred, rec):
     """녹화별 정확도. 어떤 녹화(=fold)가 특히 어려운지 보는 용도."""
     df = pd.DataFrame({"rec": rec, "true": y, "correct": np.asarray(y) == np.asarray(pred)})
