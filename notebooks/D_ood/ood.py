@@ -85,6 +85,68 @@ class KNN:
         return np.partition(d, self.k - 1, axis=1)[:, self.k - 1]
 
 
+class ScaledPrototype(Prototype):
+    """프로토타입 거리를 재질별 학습 구간 거리 중앙값으로 나눈 값의 최솟값.
+
+    조용한 재질은 원래 좁게 뭉쳐 있어서 같은 거리도 더 크게 친다 (진동 세기와 분리).
+    """
+
+    def fit(self, z, y):
+        super().fit(z, y)
+        d = self._dist(z)
+        self.scale_ = np.array([np.median(d[y == c, i]) for i, c in enumerate(self.classes_)])
+        return self
+
+    def _dist(self, z):
+        d = super()._dist(z)
+        return d / self.scale_ if hasattr(self, "scale_") else d
+
+
+class NearestScaledPrototype(ScaledPrototype):
+    """원래 거리로 가장 가까운 재질을 먼저 고른 뒤, 그 재질의 퍼짐으로만 나눈 거리.
+
+    ScaledPrototype은 넓게 퍼진(덜컹거리는) 재질이 나누는 값이 커서 조용한 미등록 구간을 흡수한다.
+    """
+
+    def _nearest(self, z):
+        return Prototype._dist(self, z).argmin(axis=1)
+
+    def score(self, z):
+        d = Prototype._dist(self, z)
+        i = d.argmin(axis=1)
+        return d[np.arange(len(z)), i] / self.scale_[i]
+
+    def predict(self, z):
+        return self.classes_[self._nearest(z)]
+
+
+class ClassMahalanobis:
+    """재질마다 따로 구한 공분산(Ledoit-Wolf 수축)의 최소 마할라노비스 거리."""
+
+    def fit(self, z, y):
+        from sklearn.covariance import LedoitWolf
+        self.classes_ = np.unique(y)
+        self.mu_, self.prec_ = [], []
+        for c in self.classes_:
+            lw = LedoitWolf().fit(z[y == c])
+            self.mu_.append(lw.location_)
+            self.prec_.append(lw.precision_)
+        return self
+
+    def score(self, z):
+        d2 = np.stack([np.einsum("nd,de,ne->n", z - mu, prec, z - mu)
+                       for mu, prec in zip(self.mu_, self.prec_)], axis=1)
+        return d2.min(axis=1)
+
+
+class RatioPrototype(Prototype):
+    """가장 가까운 / 두 번째로 가까운 프로토타입 거리 비율. 1에 가까울수록 어느 재질인지 애매하다."""
+
+    def score(self, z):
+        d = np.sort(self._dist(z), axis=1)
+        return d[:, 0] / (d[:, 1] + 1e-12)
+
+
 def msp_score(logits):
     """Hendrycks & Gimpel, 2017: softmax 최대 확률 (음수로 바꿔 클수록 미등록)."""
     return -softmax(logits, axis=1).max(axis=1)
@@ -99,6 +161,13 @@ EMBEDDING_SCORERS = {
     "proto": Prototype,
     "maha": Mahalanobis,
     "knn": KNN,
+}
+# 진동 세기와 거리를 떼어 놓으려는 점수 (D-03)
+SCALE_FREE_SCORERS = {
+    "scaled": ScaledPrototype,
+    "scaled_nn": NearestScaledPrototype,
+    "cmaha": ClassMahalanobis,
+    "ratio": RatioPrototype,
 }
 LOGIT_SCORERS = {
     "msp": msp_score,
@@ -128,8 +197,13 @@ def open_set_predict(proto, z, tau, unknown=-1):
 
 
 # ---------------------------------------------------------------- 실험 루프
-def run_fold(z, y, rec, split, logits=None, knn_k=10):
-    """한 fold에서 모든 방법의 AUROC·FPR@95와 제안 방법의 τ 판정 결과를 계산한다."""
+def run_fold(z, y, rec, split, logits=None, knn_k=10, scorers=None, tau_methods=("proto",), vib=None):
+    """한 fold에서 모든 방법의 AUROC·FPR@95와 tau_methods의 τ 판정 결과를 계산한다.
+
+    vib(구간별 진동 세기)를 주면 테스트 구간에서 점수와 진동의 Spearman 상관(rho_vib)도 계산한다.
+    """
+    from scipy.stats import spearmanr
+    scorers = EMBEDDING_SCORERS if scorers is None else scorers
     train = np.isin(rec, split["train"])
     known = np.isin(rec, split["test_known"])
     unknown = np.isin(rec, split["unknown"])
@@ -137,7 +211,7 @@ def run_fold(z, y, rec, split, logits=None, knn_k=10):
     y_ood = unknown[test].astype(int)
 
     scores = {}
-    for name, cls in EMBEDDING_SCORERS.items():
+    for name, cls in scorers.items():
         make = (lambda: cls(k=knn_k)) if name == "knn" else cls
         scores[name] = make().fit(z[train], y[train]).score(z[test])
     if logits is not None:
@@ -149,18 +223,23 @@ def run_fold(z, y, rec, split, logits=None, knn_k=10):
         for name, s in scores.items()
     ]
 
-    # 제안 방법: τ는 학습 녹화 안의 검증 녹화로만 정한다
-    tau = fit_tau(val_scores(Prototype, z, y, rec, split["train"]))
-    s = scores["proto"]
-    next(r for r in rows if r["method"] == "proto").update({
-        "tau": tau,
-        "known_pass": float(np.mean(s[y_ood == 0] <= tau)),
-        "unknown_reject": float(np.mean(s[y_ood == 1] > tau)),
-    })
+    if vib is not None:
+        for r in rows:
+            r["rho_vib"] = float(spearmanr(scores[r["method"]], vib[test])[0])
+
+    # τ는 학습 녹화 안의 검증 녹화로만 정한다
+    for name in tau_methods:
+        tau = fit_tau(val_scores(scorers[name], z, y, rec, split["train"]))
+        s = scores[name]
+        next(r for r in rows if r["method"] == name).update({
+            "tau": tau,
+            "known_pass": float(np.mean(s[y_ood == 0] <= tau)),
+            "unknown_reject": float(np.mean(s[y_ood == 1] > tau)),
+        })
     return rows
 
 
-def run_heldout(load, y, rec, model, folds=None, knn_k=10):
+def run_heldout(load, y, rec, model, folds=None, knn_k=10, **fold_kw):
     """load(held_out, fold) -> (z, logits 또는 None). fold별 결과 표를 반환한다.
 
     folds를 주지 않으면 splits/folds.json의 material_out(147개)을 쓴다.
@@ -169,7 +248,7 @@ def run_heldout(load, y, rec, model, folds=None, knn_k=10):
     rows = []
     for split in folds:
         z, logits = load(split["held_out"], split["fold"])
-        for row in run_fold(z, y, rec, split, logits, knn_k):
+        for row in run_fold(z, y, rec, split, logits, knn_k, **fold_kw):
             rows.append({
                 "model": model,
                 "heldout": split["held_out"],
