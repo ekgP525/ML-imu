@@ -1,3 +1,28 @@
 date,owner,model,setting,fold,macro_f1,accuracy,mode_macro_f1,auroc,fpr95,note
 2026-11-23,B,rule_baseline,8class,all,0.351,0.3732,0.6663,,,log(acc_z std) 재질별 중앙값 최근접
 2026-11-23,C,minirocket,8class,all,0.2571,0.2796,0.7163,,,"aeon MiniRocket 9996 features + Ridge, 6ch, train-rec norm, total 3235s"
+2026-11-24,B,logreg_l2,8class_A,all,0.3974,0.4065,0.7177,,,
+2026-11-24,B,logreg_l1,8class_A,all,0.3504,0.3582,0.6944,,,
+2026-11-24,B,knn,8class_A,all,0.2145,0.2275,0.6599,,,k=15
+2026-11-24,B,rf,8class_A,all,0.2921,0.3009,0.6772,,,
+2026-11-24,B,mlp,8class_A,all,0.2391,0.2609,0.6629,,,
+2026-11-24,B,logreg_l2,8class_AB,all,0.3645,0.371,0.7022,,,
+2026-11-24,B,logreg_l1,8class_AB,all,0.3309,0.3373,0.6772,,,
+2026-11-24,B,knn,8class_AB,all,0.1758,0.1901,0.6131,,,k=15
+2026-11-24,B,rf,8class_AB,all,0.2679,0.2747,0.6675,,,
+2026-11-24,B,mlp,8class_AB,all,0.2198,0.2419,0.6344,,,
+2026-11-24,B,logreg_l2,8class_ABC,all,0.3712,0.378,0.71,,,
+2026-11-24,B,logreg_l1,8class_ABC,all,0.3435,0.35,0.703,,,
+2026-11-24,B,knn,8class_ABC,all,0.1752,0.1886,0.6118,,,k=15
+2026-11-24,B,rf,8class_ABC,all,0.2869,0.2914,0.6881,,,
+2026-11-24,B,mlp,8class_ABC,all,0.2431,0.2612,0.6476,,,emb_mlp_* 파일과 같은 설정
+2026-11-24,B,logreg_l2,8class_AC,all,0.4039,0.4142,0.7288,,,B 고전 모델 최고
+2026-11-24,B,logreg_l1,8class_AC,all,0.3759,0.3838,0.7227,,,
+2026-11-24,B,knn,8class_AC,all,0.2111,0.2228,0.6534,,,k=15
+2026-11-24,B,rf,8class_AC,all,0.3082,0.3142,0.698,,,
+2026-11-24,B,mlp,8class_AC,all,0.2515,0.2675,0.6641,,,
+2026-11-24,B,logreg_l2,8class_ABC-mean,all,0.4036,0.4123,0.7279,,,ABC에서 채널 평균 6개 제외
+2026-11-24,B,logreg_l1,8class_ABC-mean,all,0.3752,0.3824,0.7211,,,ABC에서 채널 평균 6개 제외
+2026-11-24,B,knn,8class_ABC-mean,all,0.1782,0.1882,0.5927,,,ABC에서 채널 평균 6개 제외
+2026-11-24,B,rf,8class_ABC-mean,all,0.3025,0.3079,0.6997,,,ABC에서 채널 평균 6개 제외
+2026-11-24,B,mlp,8class_ABC-mean,all,0.2355,0.254,0.6348,,,ABC에서 채널 평균 6개 제외
