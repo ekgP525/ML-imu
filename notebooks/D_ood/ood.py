@@ -212,3 +212,30 @@ def to_results_rows(df, owner="D", note=""):
         "note": note,
     })
     return out.reindex(columns=RESULT_COLUMNS)
+
+
+# ---------------------------------------------------------------- 원인 진단
+def diagnose_fold(z, y, rec, split):
+    """프로토타입 거리를 학습 / 알려진 테스트 / 빠진 재질 세 그룹으로 나눠 비교한다.
+
+    학습 vs 빠진 재질 AUROC가 높고 학습 vs 알려진 테스트 AUROC도 높으면,
+    임베딩은 미등록을 구분하지만 처음 보는 녹화도 똑같이 낯설게 본다(녹화 차이)는 뜻이다.
+    """
+    train = np.isin(rec, split["train"])
+    known = np.isin(rec, split["test_known"])
+    unknown = np.isin(rec, split["unknown"])
+    proto = Prototype().fit(z[train], y[train])
+    d = {g: proto.score(z[m]) for g, m in [("train", train), ("known", known), ("unknown", unknown)]}
+
+    def pair_auroc(a, b):
+        return auroc(np.r_[np.zeros(len(d[a])), np.ones(len(d[b]))], np.r_[d[a], d[b]])
+
+    return {
+        "med_train": float(np.median(d["train"])),
+        "med_known": float(np.median(d["known"])),
+        "med_unknown": float(np.median(d["unknown"])),
+        "auroc_train_unknown": pair_auroc("train", "unknown"),
+        "auroc_train_known": pair_auroc("train", "known"),
+        "auroc_known_unknown": pair_auroc("known", "unknown"),
+        "known_acc": float(np.mean(proto.predict(z[known]) == y[known])),
+    }
