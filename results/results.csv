@@ -98,3 +98,5 @@ date,owner,model,setting,fold,macro_f1,accuracy,mode_macro_f1,auroc,fpr95,note
 2026-11-24,D,mlp+scaled_nn,heldout=soft_tiles,mean,,,,0.3568,0.9764,"mid, scale-free (D-03)"
 2026-11-24,D,mlp+scaled_nn,heldout=tiled,mean,,,,0.5518,0.8278,"near, scale-free (D-03)"
 2026-11-24,D,mlp+scaled_nn,heldout=wood,mean,,,,0.6542,0.7271,"mid, scale-free (D-03)"
+2026-11-24,C,fcn,8class,all,0.2887,0.3025,0.6983,,,"FCN lam=0.0 epochs=69 batch=64 lr=0.001, 6ch, total 18.6min"
+2026-11-24,C,fcn-center,8class,all,0.2816,0.3061,0.688,,,"FCN lam=0.1 epochs=88 batch=64 lr=0.001, 6ch, total 25.1min"
