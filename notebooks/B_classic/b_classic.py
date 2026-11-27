@@ -110,12 +110,56 @@ class FeatureMLP:
 
 
 def select_features(F_all, spec):
-    """특성 조합 선택. spec 예: "A", "AB", "ABC", "AC", "ABC-mean"(B의 채널 평균 6개 제외)."""
-    groups, _, drop = spec.partition("-")
+    """특성 조합 선택.
+
+    spec 예: "A", "AB", "ABC", "AC"
+      - "-통계" : 그 통계 열을 뺌. "ABC-mean"(채널 평균 6개 제외), "AC-rms"(RMS 6개 제외)
+      - "log" 접두: 고른 열에 로그를 씌움 (A·C는 모두 양수). "logAC-rms"
+        진동이 큰 바닥일수록 값과 거리가 커지는 문제를 줄이려는 용도 (배율 → 차이로)
+    """
+    use_log = spec.startswith("log")
+    groups, _, drop = spec[3:].partition("-") if use_log else spec.partition("-")
     cols = [c for c in F_all.columns if c[0] in groups]
     if drop:
-        cols = [c for c in cols if not c.startswith(f"B_{drop}_")]
-    return F_all[cols]
+        cols = [c for c in cols if c.split("_")[1] != drop]
+    F = F_all[cols]
+    if use_log:
+        assert not groups.replace("A", "").replace("C", ""), "로그는 A·C(양수 특성)에만"
+        F = np.log(F.clip(lower=0) + 1e-8)
+    return F
+
+
+class LogRegEmbed:
+    """로지스틱 회귀(L2) + 내보내기용 임베딩·logits.
+
+    임베딩 = 학습 fold 기준으로 표준화한 특성 (로지스틱 회귀가 실제로 보는 공간)
+    logits = decision_function (softmax 전 재질별 점수, 열 순서 self.classes_)
+    """
+
+    def __init__(self, C=1.0):
+        self.C = C
+
+    def fit(self, F, y):
+        from sklearn.linear_model import LogisticRegression
+        from sklearn.preprocessing import StandardScaler
+        Fa = np.asarray(F, dtype=float)
+        self.scaler_ = StandardScaler().fit(Fa)
+        self.clf_ = LogisticRegression(C=self.C, class_weight="balanced", max_iter=3000)
+        self.clf_.fit(self.scaler_.transform(Fa), np.asarray(y).astype(str))
+        self.classes_ = self.clf_.classes_
+        return self
+
+    def embed(self, F):
+        return self.scaler_.transform(np.asarray(F, dtype=float)).astype(np.float32)
+
+    def logits(self, F):
+        z = self.clf_.decision_function(self.embed(F))
+        if z.ndim == 1:
+            z = np.stack([-z, z], axis=1)
+        return z.astype(np.float32)
+
+    def predict(self, F):
+        return self.classes_[self.logits(F).argmax(axis=1)]
 
 
 def make_classic(name, seed=SEED):
