@@ -318,3 +318,46 @@ def diagnose_fold(z, y, rec, split):
         "auroc_known_unknown": pair_auroc("known", "unknown"),
         "known_acc": float(np.mean(proto.predict(z[known]) == y[known])),
     }
+
+
+# ---------------------------------------------------------------- 임베딩 합치기
+def combine_fold(zs, y, rec, split, make_scorer=Prototype, vib=None):
+    """여러 임베딩의 점수를 검증 녹화 기준으로 표준화한 뒤 평균·최댓값으로 합친다.
+
+    zs: {모델 이름: 임베딩}. 모델마다 검증 녹화를 뺀 학습 녹화로 점수 함수를 맞추고,
+    검증 녹화 점수의 중앙값·사분위 범위로 (점수 - 중앙값) / IQR로 바꿔 크기를 맞춘다.
+    τ도 같은 검증 녹화에서 알려진 재질 95%가 통과하는 값으로 정한다 (테스트 구간은 쓰지 않음).
+    """
+    from scipy.stats import spearmanr
+    val_recs = inner_val_recordings(split["train"], y, rec)
+    fit = np.isin(rec, split["train"]) & ~np.isin(rec, val_recs)
+    val = np.isin(rec, val_recs)
+    known = np.isin(rec, split["test_known"])
+    unknown = np.isin(rec, split["unknown"])
+    test = known | unknown
+    y_ood = unknown[test].astype(int)
+
+    test_s, val_s = {}, {}
+    for name, z in zs.items():
+        scorer = make_scorer().fit(z[fit], y[fit])
+        ref = scorer.score(z[val])
+        med, iqr = np.median(ref), np.subtract(*np.percentile(ref, [75, 25]))
+        val_s[name] = (ref - med) / iqr
+        test_s[name] = (scorer.score(z[test]) - med) / iqr
+
+    names = list(zs)
+    for agg, fn in [("mean", np.mean), ("max", np.max)]:
+        key = f"{agg}({'+'.join(names)})"
+        val_s[key] = fn(np.stack([val_s[n] for n in names]), axis=0)
+        test_s[key] = fn(np.stack([test_s[n] for n in names]), axis=0)
+
+    rows = []
+    for name, s in test_s.items():
+        tau = fit_tau(val_s[name])
+        row = {"method": name, "auroc": auroc(y_ood, s), "fpr95": fpr_at_95_tpr(y_ood, s), "tau": tau,
+               "known_pass": float(np.mean(s[y_ood == 0] <= tau)),
+               "unknown_reject": float(np.mean(s[y_ood == 1] > tau))}
+        if vib is not None:
+            row["rho_vib"] = float(spearmanr(s, vib[test])[0])
+        rows.append(row)
+    return rows
