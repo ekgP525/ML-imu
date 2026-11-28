@@ -101,3 +101,36 @@ date,owner,model,setting,fold,macro_f1,accuracy,mode_macro_f1,auroc,fpr95,note
 2026-11-24,C,fcn,8class,all,0.2887,0.3025,0.6983,,,"FCN lam=0.0 epochs=69 batch=64 lr=0.001, 6ch, total 18.6min"
 2026-11-24,C,fcn-center,8class,all,0.2816,0.3061,0.688,,,"FCN lam=0.1 epochs=88 batch=64 lr=0.001, 6ch, total 25.1min"
 2026-11-25,C,lstm,8class,all,0.2611,0.2675,0.6208,,,"LSTM 2x128 last-step, epochs=74 batch=64 lr=0.001 clip=1.0, 6ch, total 21.3min"
+2026-11-27,A,rf,split=random5|feat=6ch,all,0.6447,0.6622,0.8441,,,"분할 3단계 비교 (RF 200트리, balanced)"
+2026-11-27,A,rf,split=random5|feat=6ch_no_accmean,all,0.6349,0.6521,0.8372,,,"분할 3단계 비교 (RF 200트리, balanced)"
+2026-11-27,A,rf,split=random5|feat=6ch_plus_orient,all,0.8225,0.8248,0.8838,,,"분할 3단계 비교 (RF 200트리, balanced)"
+2026-11-27,A,rf,split=group80|feat=6ch,all,0.5035,0.5294,0.7825,,,"분할 3단계 비교 (RF 200트리, balanced)"
+2026-11-27,A,rf,split=group80|feat=6ch_no_accmean,all,0.5081,0.5336,0.7832,,,"분할 3단계 비교 (RF 200트리, balanced)"
+2026-11-27,A,rf,split=group80|feat=6ch_plus_orient,all,0.5393,0.5615,0.7701,,,"분할 3단계 비교 (RF 200트리, balanced)"
+2026-11-27,A,rf,split=loro21|feat=6ch,all,0.2268,0.236,0.6707,,,"분할 3단계 비교 (RF 200트리, balanced)"
+2026-11-27,A,rf,split=loro21|feat=6ch_no_accmean,all,0.2237,0.2326,0.6672,,,"분할 3단계 비교 (RF 200트리, balanced)"
+2026-11-27,A,rf,split=loro21|feat=6ch_plus_orient,all,0.1567,0.1585,0.5776,,,"분할 3단계 비교 (RF 200트리, balanced)"
+2026-11-28,A,logreg_l2,ablation_aug=none|feat=AC,all,0.4039,0.4142,0.7288,,,증강 ablation
+2026-11-28,A,rf,ablation_aug=none|feat=AC,all,0.3082,0.3142,0.698,,,증강 ablation
+2026-11-28,A,logreg_l2,ablation_aug=scale±10%|feat=AC,all,0.402,0.4137,0.7246,,,증강 ablation
+2026-11-28,A,rf,ablation_aug=scale±10%|feat=AC,all,0.3037,0.3117,0.6965,,,증강 ablation
+2026-11-28,A,logreg_l2,ablation_aug=scale±30%|feat=AC,all,0.4071,0.4188,0.7255,,,증강 ablation
+2026-11-28,A,rf,ablation_aug=scale±30%|feat=AC,all,0.3103,0.3202,0.7019,,,증강 ablation
+2026-11-28,A,logreg_l2,ablation_aug=scale±50%|feat=AC,all,0.4128,0.4246,0.7301,,,증강 ablation
+2026-11-28,A,rf,ablation_aug=scale±50%|feat=AC,all,0.3111,0.3222,0.7042,,,증강 ablation
+2026-11-28,A,logreg_l2,ablation_aug=overlap64|feat=AC,all,0.4035,0.4138,0.7296,,,증강 ablation
+2026-11-28,A,rf,ablation_aug=overlap64|feat=AC,all,0.3081,0.3127,0.7018,,,증강 ablation
+2026-11-28,A,logreg_l2,ablation_trim=0|feat=AC,all,0.4039,0.4142,0.7288,,,녹화 앞뒤 구간 학습 제외
+2026-11-28,A,rf,ablation_trim=0|feat=AC,all,0.3082,0.3142,0.698,,,녹화 앞뒤 구간 학습 제외
+2026-11-28,A,logreg_l2,ablation_trim=1|feat=AC,all,0.4027,0.4128,0.7289,,,녹화 앞뒤 구간 학습 제외
+2026-11-28,A,rf,ablation_trim=1|feat=AC,all,0.308,0.3137,0.7008,,,녹화 앞뒤 구간 학습 제외
+2026-11-28,A,logreg_l2,ablation_trim=2|feat=AC,all,0.4033,0.4133,0.7281,,,녹화 앞뒤 구간 학습 제외
+2026-11-28,A,rf,ablation_trim=2|feat=AC,all,0.3104,0.3163,0.6996,,,녹화 앞뒤 구간 학습 제외
+2026-11-28,A,logreg_l2,ablation_trim=5|feat=AC,all,0.401,0.4107,0.7225,,,녹화 앞뒤 구간 학습 제외
+2026-11-28,A,rf,ablation_trim=5|feat=AC,all,0.3048,0.3104,0.695,,,녹화 앞뒤 구간 학습 제외
+2026-11-28,A,logreg_l2,ablation_len=32|feat=AC,all,0.3802,0.3924,0.7137,,,구간 길이 ablation
+2026-11-28,A,rf,ablation_len=32|feat=AC,all,0.2647,0.2718,0.6897,,,구간 길이 ablation
+2026-11-28,A,logreg_l2,ablation_len=64|feat=AC,all,0.3916,0.4031,0.7223,,,구간 길이 ablation
+2026-11-28,A,rf,ablation_len=64|feat=AC,all,0.2882,0.2946,0.6957,,,구간 길이 ablation
+2026-11-28,A,logreg_l2,ablation_len=128|feat=AC,all,0.4039,0.4142,0.7288,,,구간 길이 ablation
+2026-11-28,A,rf,ablation_len=128|feat=AC,all,0.3082,0.3142,0.698,,,구간 길이 ablation
